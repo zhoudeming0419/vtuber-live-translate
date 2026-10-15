@@ -2,6 +2,39 @@
 
 倒序排列，最新在上。每完成一步（或踩一个值得记的坑）加一条。
 
+## 2026-10-15 · CI 更新渠道：push main 后手机可自动更新
+
+**改动**
+
+- 新增 `.github/workflows/android-release.yml`：push 到 main（或手动）→ 以
+  `-PappVersionCode=1000+run号 -PappVersionName=2.6.1-ci<run号>` 构建打包 →
+  发布到滚动 Release `ci-latest` 并 clobber 旧 asset → 生成含当前 versionCode、
+  APK 下载地址与最近提交标题的 `update.json` 推回 main。防循环双保险：
+  commit 信息带 `[skip ci]`，workflow 用 `paths-ignore` 忽略文档 / update.json / .github。
+  触发面（push：排除 md、docs、update.json、.github；手动）。
+- `app/build.gradle.kts`：支持 CI 覆写 `versionCode` / `versionName`
+  （不传参保持 39 / 2.6.1，本地链路零变化）；同时开启 `buildConfig`，
+  注入 `UPDATE_REPO_OWNER` / `UPDATE_REPO_NAME`。
+- `UpdateChecker` 的目标仓库从硬编码常量改为读 `BuildConfig`。
+  **这是本次最要紧的一处**：原先硬编码为上游 `xieyuanqing/vtuber-live-translate`，
+  我们 fork 上发的任何构建手机都看不见。默认值改为当前 fork
+  `zhoudeming0419/vtuber-live-translate`，换仓用 `-PupdateRepoOwner` 覆写。
+- CLAUDE.md 的交付边界改写为两条工作流各司其职，并补「换渠道要先引导」的说明；
+  2026-09-13 的「不再随 push 自动运行」决策是针对复核用构建，本次是**新增**一条
+  面向手机自动更读的发布渠道，手动复核工作流原样保留，不冲突。
+
+**原因**：用户「能不能 main 更新，push 之后手机端也可以更新」。三个缺口：
+更新源指向错仓库、CI 只出不发布、versionCode 恒定导致永远「已是最新」。
+
+**真实验证**：默认参数 `assembleDebug` 产物 39 / 2.6.1 与既有链路一致；
+`-PappVersionCode=1001 -PappVersionName=2.6.1-ci101` 出包经 `aapt2 dump badging`
+确认版本正确；单测 196 例全绿、Lint 0 error；YAML 用 ruby 解析校验结构。
+**未验证**：workflow 的远端实跑（push 后第一次 CI 发布本身）与手机端从
+ci-latest 下载安装，这两步要在 push 之后才能走完。
+
+**换渠道引导提醒**：已装在手机上的版本内含旧仓库清单地址，必须先装一个
+由本仓库 `BuildConfig` 编出的 APK（本地任意构建即可），之后再靠 CI 渠道自动更新。
+
 ## 2026-10-15 · 模拟器联调：修设置页分支失联，放行回环明文
 
 **改动**

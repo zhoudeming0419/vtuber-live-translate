@@ -3,6 +3,21 @@ plugins {
     id("org.jetbrains.kotlin.android")
 }
 
+/**
+ * CI 渠道版本覆写：workflow 用 -PappVersionCode / -PappVersionName 传入自增版本，
+ * 本地不传参时保持仓库内的固定值，与既有安装链路完全一致。
+ */
+val ciVersionCode: Int? = (project.findProperty("appVersionCode") as String?)?.toIntOrNull()
+val ciVersionName: String? =
+    (project.findProperty("appVersionName") as String?)?.trim()?.takeIf { it.isNotEmpty() }
+
+/**
+ * 更新清单所在的仓库。默认读当前正在用的 fork；换仓时用 -PupdateRepoOwner / -PupdateRepoName 覆写。
+ * CI 把每次构建的 update.json 推进 main，手机端向 raw.githubusercontent.com 检查这里指向的仓库。
+ */
+fun releaseProp(name: String, fallback: String): String =
+    (project.findProperty(name) as String?)?.trim()?.takeIf { it.isNotEmpty() } ?: fallback
+
 android {
     namespace = "com.xyq.livetranslate"
     compileSdk = 35
@@ -11,8 +26,22 @@ android {
         applicationId = "com.xyq.livetranslate"
         minSdk = 29
         targetSdk = 35
-        versionCode = 39
-        versionName = "2.6.1"
+        versionCode = ciVersionCode ?: 39
+        versionName = ciVersionName ?: "2.6.1"
+
+        buildFeatures {
+            buildConfig = true
+        }
+        buildConfigField(
+            "String",
+            "UPDATE_REPO_OWNER",
+            "\"${releaseProp("updateRepoOwner", "zhoudeming0419")}\"",
+        )
+        buildConfigField(
+            "String",
+            "UPDATE_REPO_NAME",
+            "\"${releaseProp("updateRepoName", "vtuber-live-translate")}\"",
+        )
     }
 
     signingConfigs {

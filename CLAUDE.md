@@ -130,11 +130,28 @@ APK：
 android/app/build/outputs/apk/debug/app-debug.apk
 ```
 
-GitHub Actions 工作流：`.github/workflows/android-debug.yml`。
+GitHub Actions 工作流有两个，职责分开：
 
-- 工作流不随 push / Pull Request 自动运行；交付以本地验证（单测、Lint、`assembleDebug`）为准。
-- 需要远端 APK artifact 或独立复核时，用 `workflow_dispatch` 对任意分支手动触发。
-- 远端交付必须确认 Run 的 `headSha` 等于目标提交，并实际核验下载的 APK artifact。
+- `.github/workflows/android-debug.yml`（手动）：只构建 APK artifact 供独立复核，不随 push / PR 运行，
+  远端交付必须确认 Run 的 `headSha` 等于目标提交。本地验证（单测、Lint、`assembleDebug`）仍是交付底线。
+- `.github/workflows/android-release.yml`（CI 更新渠道）：**随 push 到 main 自动运行**（docs / update.json /
+  workflow 自身的改动跳过，另加 `[skip ci]` 措辞防止回写清单时循环触发）。它把带自增 versionCode 的
+  APK 发布到滚动 Release `ci-latest`，并把新版 `update.json` 推回 main——这是"push 后手机可更新"的另一半。
+
+### CI 更新渠道（手机自动更新）
+
+约束与出处：
+
+- 手机更新的唯一比较依据是 `versionCode`。CI 渠道从 **1001** 起随 run 号自增，永久高于手动内测的 39，
+  否则 App 内永远显示「已是最新」。渠道身份：Release 固定 tag `ci-latest`，每次构建覆盖 assets。
+- `update.json` 是清单的唯一真源（`versionCode` / `versionName` / `apkName` / `downloadUrls`），
+  App 按优先级读 raw main → jsDelivr → ghproxy → Releases API。**App 向哪个仓库检查由编译期
+  `BuildConfig.UPDATE_REPO_OWNER / UPDATE_REPO_NAME` 决定**，默认当前 fork；换镜像或迁移仓库时用
+  `-PupdateRepoOwner` / `-PupdateRepoName` 覆写。别再硬编码某个历史仓库——fork 发了构建手机也看不见。
+- 本地构建可覆写 `-PappVersionCode` / `-PappVersionName`；不传参时保持仓库内的 39 / 2.6.1。
+- **换新渠道要引导**：在旧安装（旧仓库清单）里，只有装过一个用新 `BuildConfig` 编出来的包之后
+  （直接安装本仓库构建的 APK 即可，代码值相同也会被 CI 渠道的更高 versionCode 正常接替），
+  之后的自动更新才会走通。
 
 ## Debug 签名
 
