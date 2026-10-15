@@ -11,11 +11,15 @@ import java.util.concurrent.TimeUnit
  * 1. 仓库内 update.json（GitHub raw）
  * 2. 国内可访问的 raw 镜像
  * 3. GitHub Releases API（再加镜像）
+ *
+ * 目标仓库来自编译期 BuildConfig：谁构建这个 App，手机就向谁的仓库检查更新
+ * （换 -PupdateRepoOwner / -PupdateRepoName 覆写）。不再硬编码某个特定的历史仓库，
+ * 否则 fork 发了构建手机也看不见。
  */
 object UpdateChecker {
 
-    const val REPO_OWNER = "xieyuanqing"
-    const val REPO_NAME = "vtuber-live-translate"
+    val REPO_OWNER: String = BuildConfig.UPDATE_REPO_OWNER
+    val REPO_NAME: String = BuildConfig.UPDATE_REPO_NAME
     const val MANIFEST_PATH = "update.json"
 
     /** 检查清单源（按顺序尝试）。 */

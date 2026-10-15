@@ -1,0 +1,157 @@
+name: Android Release (CI channel)
+
+# CI 更新渠道：push 到 main（或手动触发）→ 构建 APK → 发布到 ci-latest Release
+# → 把自增 versionCode 的 update.json 推回 main。手机端在启动时自动检查
+# raw.githubusercontent.com 的 update.json，看到更高 versionCode 就会提示更新。
+# 之后 [skip ci] + paths-ignore 双保险防止本次 commit 引发循环触发。
+"on":
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - "**/*.md"
+      - "docs/**"
+      - "update.json"
+      - ".github/**"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    name: Build and publish CI update
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # 需要提交历史来生成「本次带了哪些改动」的说明
+          fetch-depth: 30
+
+      - name: Validate Gradle wrapper
+        uses: gradle/actions/wrapper-validation@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Gradle cache
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Compute update channel identity
+        id: chan
+        run: |
+          set -euo pipefail
+          # CI 渠道版本从 1001 起随 run 号单调递增，永久高于手动内测的 39
+          CODE=$((1000 + RUN_NUMBER))
+          VERSION="2.6.1-ci${RUN_NUMBER}"
+          APK_NAME="LiveTranslate-${VERSION}.apk"
+          {
+            echo "code=${CODE}"
+            echo "version=${VERSION}"
+            echo "apk=${APK_NAME}"
+            echo "tag=ci-latest"
+            echo "download=https://github.com/${GITHUB_REPOSITORY}/releases/download/ci-latest/${APK_NAME}"
+          } >> "${GITHUB_OUTPUT}"
+
+      - name: Build debug APK (stamped)
+        working-directory: android
+        run: ./gradlew :app:assembleDebug --stacktrace -PappVersionCode=${{ steps.chan.outputs.code }} -PappVersionName=${{ steps.chan.outputs.version }}
+
+      - name: Compose update notes
+        run: |
+          set -euo pipefail
+          {
+            echo "versionCode: ${{ steps.chan.outputs.code }}"
+            echo ""
+            echo "CI 渠道构建，覆盖安装同签名旧版；正式内测说明以 GitHub Release 与 README 为准。"
+            echo ""
+            echo "本次相对上一个 ci-latest 的提交标题："
+            git log --pretty=format:"• %s" -n 8 || true
+          } > /tmp/update-notes.md
+
+      - name: Write update.json
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json, os
+          code = int(os.environ["UPDATE_CODE"])
+          version = os.environ["UPDATE_VERSION"]
+          apk = os.environ["UPDATE_APK"]
+          tag = os.environ["UPDATE_TAG"]
+          notes = open("/tmp/update-notes.md", encoding="utf-8").read().strip()
+          manifest = {
+              "versionCode": code,
+              "versionName": version,
+              "title": f"流译 {version}（CI 渠道）",
+              "notes": notes,
+              "apkName": apk,
+              "downloadUrls": [os.environ["UPDATE_DOWNLOAD"]],
+          }
+          with open("update.json", "w", encoding="utf-8") as f:
+              f.write(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n")
+          print(open("update.json", encoding="utf-8").read())
+          PY
+        env:
+          UPDATE_CODE: ${{ steps.chan.outputs.code }}
+          UPDATE_VERSION: ${{ steps.chan.outputs.version }}
+          UPDATE_APK: ${{ steps.chan.outputs.apk }}
+          UPDATE_TAG: ${{ steps.chan.outputs.tag }}
+          UPDATE_DOWNLOAD: ${{ steps.chan.outputs.download }}
+
+      - name: Publish to ci-latest release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          UPDATE_CODE: ${{ steps.chan.outputs.code }}
+          UPDATE_VERSION: ${{ steps.chan.outputs.version }}
+          UPDATE_APK: ${{ steps.chan.outputs.apk }}
+          UPDATE_TAG: ${{ steps.chan.outputs.tag }}
+        run: |
+          set -euo pipefail
+          APK="android/app/build/outputs/apk/debug/${UPDATE_APK}"
+          test -f "${APK}" || { echo "APK 未找到: ${APK}"; exit 1; }
+          # 统一素材名归一：APK 名内嵌版本，清单里 apkName 与之对齐
+          if gh release view "${UPDATE_TAG}" >/dev/null 2>&1; then
+            gh release upload "${UPDATE_TAG}" "${APK}" --clobber
+            gh release edit "${UPDATE_TAG}" \
+              --title "流译 ${UPDATE_VERSION}（CI 渠道）" \
+              --notes-file /tmp/update-notes.md
+          else
+            gh release create "${UPDATE_TAG}" "${APK}" \
+              --title "流译 ${UPDATE_VERSION}（CI 渠道）" \
+              --notes-file /tmp/update-notes.md
+          fi
+
+      - name: Commit update.json back to main
+        env:
+          UPDATE_CODE: ${{ steps.chan.outputs.code }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add update.json
+          if git diff --cached --quiet; then
+            echo "update.json 无变化，跳过提交"
+            exit 0
+          fi
+          git commit -m "ci: update.json -> ci-latest (versionCode ${UPDATE_CODE}) [skip ci]"
+          # 竞态时尽快紧贴远端，重试一次；再失败则让 workflow 失败以便人工复核
+          git fetch origin main
+          git rebase origin/main || { git rebase --abort; }
+          git push origin HEAD:main
+
+      - name: Summary
+        run: |
+          {
+            echo "## CI 更新渠道已发布"
+            echo ""
+            echo "- versionCode：${{ steps.chan.outputs.code }}"
+            echo "- versionName：${{ steps.chan.outputs.version }}"
+            echo "- Release：https://github.com/${GITHUB_REPOSITORY}/releases/tag/ci-latest"
+            echo "- 清单：https://raw.githubusercontent.com/${GITHUB_REPOSITORY}/main/update.json"
+          } >> "${GITHUB_STEP_SUMMARY}"
