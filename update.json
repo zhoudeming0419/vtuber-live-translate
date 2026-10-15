@@ -1,10 +1,10 @@
 {
-  "versionCode": 1004,
-  "versionName": "2.6.1-ci4",
-  "title": "流译 2.6.1-ci4（CI 渠道）",
-  "notes": "versionCode: 1004\n\nCI 渠道构建，覆盖安装同签名旧版；正式内测说明以 GitHub Release 与 README 为准。\n\n本次相对上一个 ci-latest 的提交标题：\n• docs: 记录 CI 渠道远端三连跑的实况与引导待办\n• ci: update.json -> ci-latest (versionCode 1003) [skip ci]\n• merge: CI 渠道发布素材名修复\n• fix: 发布前把 app-debug.apk 复制为带版本名的素材\n• merge: CI 渠道触发配置修复\n• fix: CI 渠道首次实跑 FAIL 的两处触发配置\n• merge: CI 更新渠道（push main 后手机可自动更新）\n• feat: CI 更新渠道——push main 后手机可自动更新",
-  "apkName": "LiveTranslate-2.6.1-ci4.apk",
+  "versionCode": 1005,
+  "versionName": "2.6.1-ci5",
+  "title": "流译 2.6.1-ci5（CI 渠道）",
+  "notes": "versionCode: 1005\n\nCI 渠道构建，覆盖安装同签名旧版；正式内测说明以 GitHub Release 与 README 为准。\n\n本次相对上一个 ci-latest 的提交标题：\n• fix: 文档类提交不再触发 CI 渠道构建，版本号不空转\n• ci: update.json -> ci-latest (versionCode 1004) [skip ci]\n• docs: 记录 CI 渠道远端三连跑的实况与引导待办\n• ci: update.json -> ci-latest (versionCode 1003) [skip ci]\n• merge: CI 渠道发布素材名修复\n• fix: 发布前把 app-debug.apk 复制为带版本名的素材\n• merge: CI 渠道触发配置修复\n• fix: CI 渠道首次实跑 FAIL 的两处触发配置",
+  "apkName": "LiveTranslate-2.6.1-ci5.apk",
   "downloadUrls": [
-    "https://github.com/zhoudeming0419/vtuber-live-translate/releases/download/ci-latest/LiveTranslate-2.6.1-ci4.apk"
+    "https://github.com/zhoudeming0419/vtuber-live-translate/releases/download/ci-latest/LiveTranslate-2.6.1-ci5.apk"
   ]
 }
