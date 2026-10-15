@@ -9,7 +9,11 @@ name: Android Release (CI channel)
     branches:
       - main
     paths-ignore:
-      # 唯一的回环风险是本 workflow 自己回写的 update.json；[skip ci] 再兜一层底
+      # 回写的 update.json 是唯一的回环风险（[skip ci] 兜底）；
+      # 文档与协作文件不改变 APK 内容，别让版本号空转。.github 保留触发：
+      # 改工作流本身要靠真实发布才能验证。
+      - "docs/**"
+      - "**/*.md"
       - "update.json"
   workflow_dispatch:
 
