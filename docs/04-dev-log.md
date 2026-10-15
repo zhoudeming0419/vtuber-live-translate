@@ -29,11 +29,22 @@
 **真实验证**：默认参数 `assembleDebug` 产物 39 / 2.6.1 与既有链路一致；
 `-PappVersionCode=1001 -PappVersionName=2.6.1-ci101` 出包经 `aapt2 dump badging`
 确认版本正确；单测 196 例全绿、Lint 0 error；YAML 用 ruby 解析校验结构。
-**未验证**：workflow 的远端实跑（push 后第一次 CI 发布本身）与手机端从
-ci-latest 下载安装，这两步要在 push 之后才能走完。
 
-**换渠道引导提醒**：已装在手机上的版本内含旧仓库清单地址，必须先装一个
-由本仓库 `BuildConfig` 编出的 APK（本地任意构建即可），之后再靠 CI 渠道自动更新。
+**远端实跑三连跟**（远端跑到的问题本地结构性检查没暴露，两次修复后第三次成功）：
+
+1. run 38702658631 *27s* 挂在「计算版本」：Runner 变量是 `GITHUB_RUN_NUMBER`，
+   写成 `RUN_NUMBER` 就是 unbound variable。工作流 shell 步骤无法用本地 yml 校验拦住。
+2. run 38702862936 *2m52s* 构建成功，挂在「发布」：gradle 对 debug 产物文件名
+   固定叫 `app-debug.apk`，`versionName` 不参与命名。发布前把产物复制为
+   `LiveTranslate-<版本>.apk` 再上传。
+3. run 38703410553 *1m38s* **success**。核对：Release `ci-latest` 发布
+   `LiveTranslate-2.6.1-ci3.apk`；update.json 推回 origin/main
+   （versionCode=1003）；**回写不再触发新构建**（防循环生效）；
+   Release body 首行 `versionCode: 1003` 让 Releases API 兜底源也能解析。
+
+**phone 引导（待办，无兜底就无法跳过）**：旧安装里内置的还是旧仓库的清单地址，
+要先装一个由本仓库 `BuildConfig` 编出的 APK——本地 39 就行——之后 App 内自动检查
+就会看到 ci-latest 的 1003 并走 App 内更新；此后每次 push 到 main 自动流通。
 
 ## 2026-10-15 · 模拟器联调：修设置页分支失联，放行回环明文
 
