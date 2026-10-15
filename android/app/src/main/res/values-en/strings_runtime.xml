@@ -200,10 +200,16 @@
     <string name="rt_toast_copied_translation_gemini_key">Translation service Gemini Key copied</string>
     <string name="rt_settings_hint_fill_gemini_key_first">Please enter Gemini API Key first</string>
     <string name="rt_settings_hint_fill_qwen_key_first">Please enter your Model Studio API Key first</string>
-    <string name="rt_toast_fill_gemini_api_key_first">Please fill in Gemini API Key first</string>
     <string name="rt_live_probe_success">Live model connected successfully (audio translation not tested)</string>
     <string name="rt_live_provider_gemini">Gemini</string>
     <string name="rt_live_provider_qwen">Qwen</string>
+    <string name="rt_live_gap_api_key">Please enter the API Key for %1$s first</string>
+    <string name="rt_live_gap_base_url">Please enter the workspace endpoint for %1$s first</string>
+    <string name="rt_live_model_label">Translation model</string>
+    <string name="rt_live_model_unset">Not configured</string>
+    <string name="rt_live_model_pick_title">Choose translation model</string>
+    <string name="rt_live_model_switch_hint">Takes effect the next time you start translating</string>
+    <string name="rt_live_model_locked">Translation is running; the model cannot be switched right now</string>
     <string name="rt_live_qwen_need_base_url">Please enter your Model Studio workspace endpoint first</string>
     <string name="rt_test_failed_prefix">Test failed: %1$s</string>
     <string name="rt_zen_client_restricted">Current free tier is restricted to OpenCode client, not verified in this app; retest or switch service</string>

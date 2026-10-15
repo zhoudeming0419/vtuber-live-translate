@@ -102,7 +102,10 @@ object SettingsStore {
     }
 
     /** Gemini 的模型名协议层写死，不可配置；千问必须可配（3.5 与 3.8 的会话结构不同）。 */
-    fun liveModel(c: Context): String = when (liveProvider(c)) {
+    fun liveModel(c: Context): String = liveModelFor(c, liveProvider(c))
+
+    /** 指定服务商会用的模型名，供「切换模型」列表在未选中时就显示各自的值。 */
+    fun liveModelFor(c: Context, provider: LiveProvider): String = when (provider) {
         LiveProvider.GEMINI -> GeminiLiveClient.MODEL
         LiveProvider.QWEN -> liveQwenModel(c)
     }

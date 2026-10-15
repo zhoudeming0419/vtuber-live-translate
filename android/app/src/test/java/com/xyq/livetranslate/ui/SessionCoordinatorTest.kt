@@ -5,8 +5,12 @@ import android.app.Activity
 import android.content.Context
 import android.content.Intent
 import androidx.test.core.app.ApplicationProvider
+import com.xyq.livetranslate.AppStrings
 import com.xyq.livetranslate.CaptureService
+import com.xyq.livetranslate.LiveProvider
+import com.xyq.livetranslate.R
 import com.xyq.livetranslate.SessionPromptContext
+import com.xyq.livetranslate.SettingsStore
 import com.xyq.livetranslate.StatusBus
 import com.xyq.livetranslate.TranslationMode
 import org.junit.After
@@ -15,6 +19,7 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
+import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -31,6 +36,71 @@ class SessionCoordinatorTest {
         StatusBus.captureMode = ""
         StatusBus.reset()
     }
+
+    @Before
+    fun clearSettings() {
+        context.getSharedPreferences("settings", Context.MODE_PRIVATE).edit().clear().commit()
+    }
+
+    @After
+    fun restoreSettings() {
+        context.getSharedPreferences("settings", Context.MODE_PRIVATE).edit().clear().commit()
+    }
+
+    // ---------- 启动前的配置拦截 ----------
+
+    @Test
+    fun startWithoutConfigNamesTheSelectedProviderAndSendsToSettings() {
+        val host = FakeSessionHost()
+        val coordinator = coordinator(host)
+
+        // 默认服务商是 Gemini，未配置时提示应指向 Gemini
+        coordinator.onModeToggle(StatusBus.MODE_MIC)
+
+        val message = host.messages.single()
+        assertTrue("提示应带上服务商名字：$message", message.contains(geminiLabel()))
+        assertEquals(1, host.translationSettingsOpened)
+        assertTrue(host.startedForegroundServices.isEmpty())
+        assertNull(coordinator.pendingSnapshotForTest())
+    }
+
+    @Test
+    fun videoStartWithQwenSelectedNeverAsksForGeminiKey() {
+        // 选中的是千问，拦截提示必须跟着服务商走：以前这里一律报「请填 Gemini Key」，
+        // 把已经配好千问的人挡在门外，还指向了错的设置项。
+        SettingsStore.saveLiveProvider(context, LiveProvider.QWEN)
+        val host = FakeSessionHost()
+        val coordinator = coordinator(host)
+
+        coordinator.onModeToggle(StatusBus.MODE_VIDEO)
+
+        val message = host.messages.single()
+        assertTrue("提示应指向千问：$message", message.contains(qwenLabel()))
+        assertFalse("不应再提 Gemini：$message", message.contains(geminiLabel()))
+        assertEquals(1, host.translationSettingsOpened)
+        assertTrue(host.startedForegroundServices.isEmpty())
+    }
+
+    @Test
+    fun geminiConfiguredStillBlocksOnItsOwnMissingKeyOnly() {
+        // 千问配好了但当前选的是 Gemini 且没填 Key：仍然要拦，且提示指向 Gemini
+        SettingsStore.saveLiveQwenApiKey(context, "sk-demo-key")
+        SettingsStore.saveLiveQwenBaseUrl(context, "wss://ws-demo.cn-beijing.maas.aliyuncs.com")
+        val host = FakeSessionHost()
+        val coordinator = coordinator(host)
+
+        coordinator.onModeToggle(StatusBus.MODE_MIC)
+
+        val message = host.messages.single()
+        assertTrue("提示应指向 Gemini：$message", message.contains(geminiLabel()))
+        assertFalse("不应提千问：$message", message.contains(qwenLabel()))
+        assertEquals(1, host.translationSettingsOpened)
+    }
+
+    /** 断言用界面语言下的实际文案，避免写死中文在英文测试环境里误报。 */
+    private fun geminiLabel(): String = AppStrings.get(R.string.rt_live_provider_gemini)
+
+    private fun qwenLabel(): String = AppStrings.get(R.string.rt_live_provider_qwen)
 
     @Test
     fun api33MissingPermissionsRequestsAudioAndNotification() {

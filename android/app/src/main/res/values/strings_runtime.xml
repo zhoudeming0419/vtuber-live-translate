@@ -201,10 +201,16 @@
     <string name="rt_toast_copied_translation_gemini_key">已复制翻译服务的 Gemini Key</string>
     <string name="rt_settings_hint_fill_gemini_key_first">请先填写 Gemini API Key</string>
     <string name="rt_settings_hint_fill_qwen_key_first">请先填写百炼 API Key</string>
-    <string name="rt_toast_fill_gemini_api_key_first">请先填 Gemini API Key</string>
     <string name="rt_live_probe_success">Live 模型连接通过（未测试音频翻译）</string>
     <string name="rt_live_provider_gemini">Gemini</string>
     <string name="rt_live_provider_qwen">通义千问</string>
+    <string name="rt_live_gap_api_key">请先填写%1$s的 API Key</string>
+    <string name="rt_live_gap_base_url">请先填写%1$s的业务空间地址</string>
+    <string name="rt_live_model_label">翻译模型</string>
+    <string name="rt_live_model_unset">未配置</string>
+    <string name="rt_live_model_pick_title">选择翻译模型</string>
+    <string name="rt_live_model_switch_hint">切换后下一次开始翻译生效</string>
+    <string name="rt_live_model_locked">翻译进行中，暂时不能切换模型</string>
     <string name="rt_live_qwen_need_base_url">请先填写百炼业务空间地址</string>
     <string name="rt_test_failed_prefix">测试失败：%1$s</string>
     <string name="rt_zen_client_restricted">当前免费接口限制仅 OpenCode 客户端使用，本 App 未验证可用；可重新测试或切换服务</string>

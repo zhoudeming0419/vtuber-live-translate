@@ -16,13 +16,17 @@ import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.textfield.MaterialAutoCompleteTextView
 import com.google.android.material.textfield.TextInputEditText
 import com.xyq.livetranslate.CaptureService
+import com.xyq.livetranslate.LiveProvider
 import com.xyq.livetranslate.R
 import com.xyq.livetranslate.SceneLibraryStore
+import com.xyq.livetranslate.SettingsStore
 import com.xyq.livetranslate.StatusBus
 import com.xyq.livetranslate.TranslationLanguageCatalog
 import com.xyq.livetranslate.TranslationMode
 import com.xyq.livetranslate.TranslationPlanStore
 import com.xyq.livetranslate.formatElapsedDuration
+import com.xyq.livetranslate.liveConfigGap
+import com.xyq.livetranslate.liveModelEntryText
 
 /** 一个模式主页的唯一 View 绑定。两个 controller 必须共享同一个实例。 */
 internal data class ModeHomeViews(
@@ -55,6 +59,8 @@ internal data class ModeHomeViews(
     val languageSwapButton: TextView,
     val planCard: View,
     val planSummary: TextView,
+    val modelSwitch: View,
+    val modelValue: TextView,
     val profileSummary: TextView,
     val openSceneLibraryButton: View,
     val sessionContext: TextInputEditText,
@@ -104,6 +110,8 @@ internal data class ModeHomeViews(
                 languageSwapButton = root.findViewById(R.id.btnInterpSwapLang),
                 planCard = root.findViewById(R.id.cardInterpPlan),
                 planSummary = root.findViewById(R.id.tvInterpPlanSummary),
+                modelSwitch = root.findViewById(R.id.btnInterpModelSwitch),
+                modelValue = root.findViewById(R.id.tvInterpModelValue),
                 profileSummary = root.findViewById(R.id.tvInterpProfile),
                 openSceneLibraryButton = root.findViewById(R.id.btnInterpOpenPlanLibrary),
                 sessionContext = root.findViewById(R.id.etInterpSessionContext),
@@ -151,6 +159,8 @@ internal data class ModeHomeViews(
                 languageSwapButton = root.findViewById(R.id.btnVideoSwapLang),
                 planCard = root.findViewById(R.id.cardVideoPlan),
                 planSummary = root.findViewById(R.id.tvVideoPlanSummary),
+                modelSwitch = root.findViewById(R.id.btnVideoModelSwitch),
+                modelValue = root.findViewById(R.id.tvVideoModelValue),
                 profileSummary = root.findViewById(R.id.tvCurrentProfile),
                 openSceneLibraryButton = root.findViewById(R.id.btnVideoOpenPlanLibrary),
                 sessionContext = root.findViewById(R.id.etVideoSessionContext),
@@ -181,6 +191,7 @@ internal class ModeHomeController(
     private val openSceneLibrary: (mode: TranslationMode, returnTabId: Int) -> Unit,
     private val openOverlaySettings: () -> Unit,
     private val openMainTab: (tabId: Int) -> Unit,
+    private val openTranslationSettings: () -> Unit,
 ) {
     private companion object {
         /** 静音多久才算「可能没接到声音」；正常停顿不该触发排查提示。 */
@@ -288,6 +299,87 @@ internal class ModeHomeController(
     fun refreshConfiguration() {
         setupHomeSceneChips()
         renderLanguageControls()
+        setupModelEntry()
+    }
+
+    /**
+     * 模型入口：把「这一场会用哪家模型」摆在开始按钮之前，未配置时就在这里说清缺什么，
+     * 而不是等点下开始翻译才被拦下来。切换立即持久化，下一次开始翻译生效。
+     */
+    private fun setupModelEntry() {
+        val openPicker = View.OnClickListener { showModelPicker() }
+        views.modelSwitch.setOnClickListener(openPicker)
+        views.modelValue.setOnClickListener(openPicker)
+        renderModelEntry()
+    }
+
+    private fun renderModelEntry() {
+        val provider = SettingsStore.liveProvider(context)
+        val gap = liveConfigGap(context)
+        val enabled = !StatusBus.serviceRunning
+        // 未配置时直接写明缺哪一项，配好了才显示实际会用的模型名。
+        views.modelValue.text = liveModelEntryText(
+            provider = provider,
+            model = SettingsStore.liveModel(context),
+            gap = gap,
+        )
+        views.modelValue.setTextColor(
+            context.getColor(
+                when {
+                    gap != null -> R.color.warning
+                    else -> R.color.text_muted
+                }
+            )
+        )
+        views.modelSwitch.isEnabled = enabled
+        views.modelValue.isEnabled = enabled
+        views.modelSwitch.alpha = if (enabled) 1f else 0.5f
+    }
+
+    private fun showModelPicker() {
+        if (StatusBus.serviceRunning) {
+            Toast.makeText(context, context.getString(R.string.rt_live_model_locked), Toast.LENGTH_SHORT).show()
+            return
+        }
+        val providers = LiveProvider.entries
+        val items = providers.map { provider ->
+            val model = SettingsStore.liveModelFor(context, provider)
+            val configured = liveConfigGap(context, provider) == null
+            if (configured) {
+                "${provider.label} · $model"
+            } else {
+                // 未配置的那家也要能选中——选中后立刻告诉你差什么，而不是从列表里消失。
+                "${provider.label} · $model（${context.getString(R.string.rt_live_model_unset)}）"
+            }
+        }.toTypedArray()
+
+        MaterialAlertDialogBuilder(context)
+            .setTitle(R.string.rt_live_model_pick_title)
+            .setItems(items) { _, which ->
+                val provider = providers.getOrNull(which) ?: return@setItems
+                applyProviderSelection(provider)
+            }
+            .setNegativeButton(R.string.dialog_btn_close, null)
+            .show()
+    }
+
+    private fun applyProviderSelection(provider: LiveProvider) {
+        if (provider != SettingsStore.liveProvider(context)) {
+            SettingsStore.saveLiveProvider(context, provider)
+        }
+        renderModelEntry()
+        val gap = liveConfigGap(context)
+        if (gap != null) {
+            // 选了还没配好的服务商：说清缺哪一项，并直接送到翻译服务设置页。
+            Toast.makeText(context, gap.message(provider), Toast.LENGTH_SHORT).show()
+            openTranslationSettings()
+        } else {
+            Toast.makeText(
+                context,
+                context.getString(R.string.rt_live_model_switch_hint),
+                Toast.LENGTH_SHORT,
+            ).show()
+        }
     }
 
     internal fun refreshHomeScenesForTest() = setupHomeSceneChips()
@@ -363,6 +455,8 @@ internal class ModeHomeController(
         views.sourceLanguage.isEnabled = !status.serviceRunning
         views.targetLanguage.isEnabled = !status.serviceRunning
         views.startButton.isEnabled = !status.serviceRunning
+        // 会话启动时模型已冻结进快照，运行期间不允许切换，避免「改了却没生效」的误会。
+        renderModelEntry()
 
         // 开始按钮被禁用时必须说清原因，并给出去看正在运行的那一边的入口。
         views.busyRow.visibility = if (blockedByOther) View.VISIBLE else View.GONE

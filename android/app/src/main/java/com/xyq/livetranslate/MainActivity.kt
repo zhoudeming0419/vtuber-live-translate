@@ -72,6 +72,8 @@ class MainActivity : AppCompatActivity() {
             },
             onSubPageShown = { pageId ->
                 if (pageId == R.id.pageSceneLibrary) sceneLibraryController.reload()
+                // 首页可能在设置页关闭期间切换过服务商，重开时必须按持久值重画分支。
+                if (pageId == R.id.pageSettingsTranslate) settingsController.refreshDisplayedProvider()
             },
             beforeSubPageClosed = { pageId ->
                 if (pageId == R.id.pageSettingsProfileAi || pageId == R.id.pageSettingsTranslate) {
@@ -150,6 +152,11 @@ class MainActivity : AppCompatActivity() {
             openSceneLibrary = ::openSceneLibrary,
             openOverlaySettings = ::openOverlaySettings,
             openMainTab = { tabId -> navigator.showMain(tabId) },
+            openTranslationSettings = {
+                if (navigator.showMain(R.id.nav_settings)) {
+                    navigator.openSub(R.id.pageSettingsTranslate)
+                }
+            },
         )
         homeControllers[TranslationMode.VIDEO] = ModeHomeController(
             context = this,
@@ -159,6 +166,11 @@ class MainActivity : AppCompatActivity() {
             openSceneLibrary = ::openSceneLibrary,
             openOverlaySettings = ::openOverlaySettings,
             openMainTab = { tabId -> navigator.showMain(tabId) },
+            openTranslationSettings = {
+                if (navigator.showMain(R.id.nav_settings)) {
+                    navigator.openSub(R.id.pageSettingsTranslate)
+                }
+            },
         )
         modeHomeControllers = homeControllers.toMap()
         sessionCoordinator.bindSessionContextAccess(sessionContextController)

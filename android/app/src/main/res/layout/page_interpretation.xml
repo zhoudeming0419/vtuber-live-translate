@@ -261,6 +261,41 @@
                         app:singleLine="true"
                         app:singleSelection="true" />
                 </HorizontalScrollView>
+
+                <!-- 翻译模型：开始前就能确认这一场走哪家模型，未配置也在这里说清缺什么。 -->
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="@dimen/space_16"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <TextView
+                        style="@style/LuminousSectionLabel"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="@string/rt_live_model_label" />
+
+                    <TextView
+                        android:id="@+id/btnInterpModelSwitch"
+                        android:layout_width="wrap_content"
+                        android:layout_height="48dp"
+                        android:gravity="center"
+                        android:paddingHorizontal="@dimen/space_8"
+                        android:text="@string/btn_switch_service"
+                        android:textColor="@color/brand"
+                        android:textSize="13sp"
+                        android:textStyle="bold" />
+                </LinearLayout>
+
+                <TextView
+                    android:id="@+id/tvInterpModelValue"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="@dimen/grid_4"
+                    android:textColor="@color/text_muted"
+                    android:textSize="12sp" />
             </LinearLayout>
 
             <!-- 本场背景：默认折叠一行入口。 -->
