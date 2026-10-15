@@ -171,7 +171,6 @@
     <!-- SessionCoordinator -->
     <string name="rt_toast_session_running_conflict">当前正在运行「%1$s」，请先停止后再切换</string>
     <string name="rt_toast_projection_permission_denied">未获得屏幕捕获授权，无法内录</string>
-    <string name="rt_toast_fill_gemini_api_key_first">请先填 Gemini API Key</string>
     <string name="rt_toast_record_audio_permission_required">缺少录音权限，请在系统设置中授予</string>
     <string name="rt_toast_overlay_permission_required">请开启悬浮窗权限，返回后将自动继续</string>
 
@@ -201,7 +200,12 @@
     <string name="rt_toast_copied_first_gemini_key">已复制首个 Gemini Key（多 Key 仅取第一个）</string>
     <string name="rt_toast_copied_translation_gemini_key">已复制翻译服务的 Gemini Key</string>
     <string name="rt_settings_hint_fill_gemini_key_first">请先填写 Gemini API Key</string>
+    <string name="rt_settings_hint_fill_qwen_key_first">请先填写百炼 API Key</string>
+    <string name="rt_toast_fill_gemini_api_key_first">请先填 Gemini API Key</string>
     <string name="rt_live_probe_success">Live 模型连接通过（未测试音频翻译）</string>
+    <string name="rt_live_provider_gemini">Gemini</string>
+    <string name="rt_live_provider_qwen">通义千问</string>
+    <string name="rt_live_qwen_need_base_url">请先填写百炼业务空间地址</string>
     <string name="rt_test_failed_prefix">测试失败：%1$s</string>
     <string name="rt_zen_client_restricted">当前免费接口限制仅 OpenCode 客户端使用，本 App 未验证可用；可重新测试或切换服务</string>
     <string name="rt_zen_ready_status">已接入免费模型（公开接入点）：可直接使用，或点「测试分析服务」确认当前可用性</string>

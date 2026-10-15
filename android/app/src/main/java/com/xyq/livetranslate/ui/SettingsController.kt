@@ -24,10 +24,13 @@ import com.google.android.material.slider.Slider
 import com.google.android.material.textfield.TextInputLayout
 import com.xyq.livetranslate.AiTextClient
 import com.xyq.livetranslate.GeminiLiveClient
+import com.xyq.livetranslate.LiveProvider
 import com.xyq.livetranslate.OpenCodeZenCatalog
+import com.xyq.livetranslate.QwenLiveClient
 import com.xyq.livetranslate.R
 import com.xyq.livetranslate.SettingsStore
 import com.xyq.livetranslate.TranslationMode
+import com.xyq.livetranslate.TranslationPlanStore
 
 /** 一次状态采集产生的设置诊断快照；controller 不直接读取 StatusBus。 */
 internal data class SettingsDiagnosticsState(
@@ -65,6 +68,17 @@ internal data class SettingsViews(
     val btnSubtitlePreviewLight: MaterialButton,
     val etApiKeys: EditText,
     val etBaseUrl: EditText,
+    val toggleLiveProvider: MaterialButtonToggleGroup,
+    val btnLiveProviderGemini: MaterialButton,
+    val btnLiveProviderQwen: MaterialButton,
+    val containerGeminiKey: View,
+    val containerQwenKey: View,
+    val etQwenApiKey: EditText,
+    val etQwenBaseUrl: EditText,
+    val etQwenModel: EditText,
+    val btnPasteQwenApiKey: Button,
+    val dividerConnectionOptions: View,
+    val tvEchoScopeNote: TextView,
     val slFont: Slider,
     val slOpacity: Slider,
     val slLines: Slider,
@@ -147,6 +161,17 @@ internal data class SettingsViews(
                 btnSubtitlePreviewLight = root.findViewById(R.id.btnSubtitlePreviewLight),
                 etApiKeys = root.findViewById(R.id.etApiKeys),
                 etBaseUrl = root.findViewById(R.id.etBaseUrl),
+                toggleLiveProvider = root.findViewById(R.id.toggleLiveProvider),
+                btnLiveProviderGemini = root.findViewById(R.id.btnLiveProviderGemini),
+                btnLiveProviderQwen = root.findViewById(R.id.btnLiveProviderQwen),
+                containerGeminiKey = root.findViewById(R.id.containerGeminiKey),
+                containerQwenKey = root.findViewById(R.id.containerQwenKey),
+                etQwenApiKey = root.findViewById(R.id.etQwenApiKey),
+                etQwenBaseUrl = root.findViewById(R.id.etQwenBaseUrl),
+                etQwenModel = root.findViewById(R.id.etQwenModel),
+                btnPasteQwenApiKey = root.findViewById(R.id.btnPasteQwenApiKey),
+                dividerConnectionOptions = root.findViewById(R.id.dividerConnectionOptions),
+                tvEchoScopeNote = root.findViewById(R.id.tvEchoScopeNote),
                 slFont = root.findViewById(R.id.slFont),
                 slOpacity = root.findViewById(R.id.slOpacity),
                 slLines = root.findViewById(R.id.slLines),
@@ -230,9 +255,17 @@ internal class SettingsController(
         views.etBaseUrl.setText(SettingsStore.baseUrl(context))
         views.btnViewApiKeyTutorial.setOnClickListener { showApiKeyTutorialDialog() }
         views.btnPasteApiKey.setOnClickListener { pasteTranslateApiKey() }
+        views.btnPasteQwenApiKey.setOnClickListener { pasteQwenApiKey() }
         views.btnTestTranslateConnection.setOnClickListener { testTranslateConnection() }
         views.etApiKeys.doAfterTextChanged { invalidateTranslateTestStatus() }
         views.etBaseUrl.doAfterTextChanged { invalidateTranslateTestStatus() }
+        views.etQwenApiKey.doAfterTextChanged { invalidateTranslateTestStatus() }
+        views.etQwenBaseUrl.doAfterTextChanged { invalidateTranslateTestStatus() }
+        views.etQwenModel.doAfterTextChanged {
+            invalidateTranslateTestStatus()
+            renderEchoScopeNote()
+        }
+        setupLiveProviderToggle()
 
         // 第二 AI（背景分析）
         setupSecondAiServiceToggle()
@@ -256,16 +289,17 @@ internal class SettingsController(
 
     /** 折叠行只靠行尾 chevron 表达状态，标题写在布局里。 */
     private fun setupDisclosure(button: MaterialButton, content: View) {
-        fun render() {
-            val expanded = content.visibility == View.VISIBLE
-            button.setIconResource(if (expanded) R.drawable.ic_chevron_down_24 else R.drawable.ic_chevron_right_24)
-            ViewCompat.setStateDescription(button, if (expanded) context.getString(R.string.rt_state_expanded) else context.getString(R.string.rt_state_collapsed))
-        }
-        render()
+        renderDisclosureChevron(button, content)
         button.setOnClickListener {
             content.visibility = if (content.visibility == View.VISIBLE) View.GONE else View.VISIBLE
-            render()
+            renderDisclosureChevron(button, content)
         }
+    }
+
+    private fun renderDisclosureChevron(button: MaterialButton, content: View) {
+        val expanded = content.visibility == View.VISIBLE
+        button.setIconResource(if (expanded) R.drawable.ic_chevron_down_24 else R.drawable.ic_chevron_right_24)
+        ViewCompat.setStateDescription(button, if (expanded) context.getString(R.string.rt_state_expanded) else context.getString(R.string.rt_state_collapsed))
     }
 
     fun persistSecondAiInputs() {
@@ -307,8 +341,12 @@ internal class SettingsController(
         }
     }
 
-    fun persistDraftInputs() {
-        // 这同时是「离开这两个设置页」的钩子（onPause 与 beforeSubPageClosed）：
+    /** 子页每次被展示时重读持久化的服务商：用户可能刚在首页把服务商换了。 */
+    fun refreshDisplayedProvider() {
+        renderLiveProviderUi(SettingsStore.liveProvider(context))
+    }
+
+    fun persistDraftInputs() {        // 这同时是「离开这两个设置页」的钩子（onPause 与 beforeSubPageClosed）：
         // 模型下拉是挂在 WindowManager 上的，页面走了必须收掉，否则悬在别的页面上或泄漏窗口。
         dismissModelPopup()
         SettingsStore.saveApiKeys(context, views.etApiKeys.text?.toString().orEmpty())
@@ -316,6 +354,10 @@ internal class SettingsController(
             context,
             views.etBaseUrl.text?.toString().orEmpty().trim().ifEmpty { SettingsStore.DEFAULT_BASE_URL },
         )
+        // 两家服务商的字段始终各自持有自己的存档值，因此可以无条件全部落盘，互不覆盖。
+        SettingsStore.saveLiveQwenApiKey(context, views.etQwenApiKey.text?.toString().orEmpty())
+        SettingsStore.saveLiveQwenBaseUrl(context, views.etQwenBaseUrl.text?.toString().orEmpty())
+        SettingsStore.saveLiveQwenModel(context, views.etQwenModel.text?.toString().orEmpty())
         persistSecondAiInputs()
     }
 
@@ -400,6 +442,85 @@ internal class SettingsController(
         toast(context.getString(R.string.rt_toast_pasted_key))
     }
 
+    private fun pasteQwenApiKey() {
+        val text = getClipboardText()
+        if (text.isNullOrBlank()) {
+            toast(context.getString(R.string.rt_toast_clipboard_empty))
+            return
+        }
+        // 千问按单 Key 使用，粘贴整段时只取第一个，避免把逗号串当凭据发出去。
+        views.etQwenApiKey.setText(SettingsStore.extractFirstApiKey(text))
+        SettingsStore.saveLiveQwenApiKey(context, views.etQwenApiKey.text?.toString().orEmpty())
+        invalidateTranslateTestStatus()
+        toast(context.getString(R.string.rt_toast_pasted_key))
+    }
+
+    private var syncingLiveProviderUi = false
+
+    // 记录 Gemini 折叠行的展开状态：切到千问时整行隐藏，切回来要原样恢复。
+    private var geminiAddressExpanded = false
+
+    private fun setupLiveProviderToggle() {
+        renderLiveProviderUi(SettingsStore.liveProvider(context))
+        views.toggleLiveProvider.addOnButtonCheckedListener { _, checkedId, isChecked ->
+            if (!isChecked || syncingLiveProviderUi) return@addOnButtonCheckedListener
+            val provider = if (checkedId == views.btnLiveProviderQwen.id) {
+                LiveProvider.QWEN
+            } else {
+                LiveProvider.GEMINI
+            }
+            if (provider == SettingsStore.liveProvider(context)) return@addOnButtonCheckedListener
+            // 先落盘当前服务商的输入，再切；否则正在编辑的内容会被下一家的回填覆盖。
+            persistDraftInputs()
+            SettingsStore.saveLiveProvider(context, provider)
+            renderLiveProviderUi(provider)
+        }
+    }
+
+    private fun renderLiveProviderUi(provider: LiveProvider) {
+        val checkedId = when (provider) {
+            LiveProvider.GEMINI -> views.btnLiveProviderGemini.id
+            LiveProvider.QWEN -> views.btnLiveProviderQwen.id
+        }
+        if (views.toggleLiveProvider.checkedButtonId != checkedId) {
+            syncingLiveProviderUi = true
+            views.toggleLiveProvider.check(checkedId)
+            syncingLiveProviderUi = false
+        }
+
+        val isGemini = provider == LiveProvider.GEMINI
+        views.containerGeminiKey.visibility = if (isGemini) View.VISIBLE else View.GONE
+        views.containerQwenKey.visibility = if (isGemini) View.GONE else View.VISIBLE
+
+        // 千问的业务空间地址在主卡必填，折叠卡里那行 Gemini 反代地址整行收起。
+        if (isGemini) {
+            views.btnConnectionOptions.visibility = View.VISIBLE
+            views.dividerConnectionOptions.visibility = View.VISIBLE
+            views.connectionOptions.visibility = if (geminiAddressExpanded) View.VISIBLE else View.GONE
+            renderDisclosureChevron(views.btnConnectionOptions, views.connectionOptions)
+        } else {
+            geminiAddressExpanded = views.connectionOptions.visibility == View.VISIBLE
+            views.btnConnectionOptions.visibility = View.GONE
+            views.connectionOptions.visibility = View.GONE
+            views.dividerConnectionOptions.visibility = View.GONE
+        }
+
+        // 两家字段各自回填自己的存档：隐藏的那一组也保持有效值，落盘时不会互相覆盖。
+        views.etQwenApiKey.setText(SettingsStore.liveQwenApiKey(context))
+        views.etQwenBaseUrl.setText(SettingsStore.liveQwenBaseUrl(context))
+        views.etQwenModel.setText(SettingsStore.liveQwenModel(context))
+
+        invalidateTranslateTestStatus()
+        renderEchoScopeNote()
+    }
+
+    /** 同语种跳过选项只有千问 3.5 及更早支持；3.8 下这个开关无效，如实标注而不是假装生效。 */
+    private fun renderEchoScopeNote() {
+        val applies = SettingsStore.liveProvider(context) == LiveProvider.QWEN &&
+            QwenLiveClient.isQwen38Family(SettingsStore.liveQwenModel(context))
+        views.tvEchoScopeNote.visibility = if (applies) View.VISIBLE else View.GONE
+    }
+
     private fun pasteSecondAiKey() {
         val text = getClipboardText()
         if (text.isNullOrBlank()) {
@@ -433,25 +554,68 @@ internal class SettingsController(
 
     private fun testTranslateConnection() {
         if (translateTesting) return
-        val baseUrl = views.etBaseUrl.text?.toString().orEmpty().trim().ifEmpty { SettingsStore.DEFAULT_BASE_URL }
-        val apiKey = SettingsStore.extractFirstApiKey(views.etApiKeys.text?.toString().orEmpty())
+        val provider = SettingsStore.liveProvider(context)
+        val isGemini = provider == LiveProvider.GEMINI
+
+        val apiKeyField = if (isGemini) views.etApiKeys else views.etQwenApiKey
+        val apiKey = SettingsStore.extractFirstApiKey(apiKeyField.text?.toString().orEmpty())
         if (apiKey.isEmpty()) {
-            renderTranslateTestStatus(true, context.getString(R.string.rt_settings_hint_fill_gemini_key_first))
-            views.etApiKeys.requestFocus()
+            renderTranslateTestStatus(
+                true,
+                context.getString(
+                    if (isGemini) {
+                        R.string.rt_settings_hint_fill_gemini_key_first
+                    } else {
+                        R.string.rt_settings_hint_fill_qwen_key_first
+                    },
+                ),
+            )
+            apiKeyField.requestFocus()
             return
         }
+
+        val baseUrl: String
+        val model: String
+        if (isGemini) {
+            baseUrl = views.etBaseUrl.text?.toString().orEmpty().trim()
+                .ifEmpty { SettingsStore.DEFAULT_BASE_URL }
+            model = GeminiLiveClient.MODEL
+        } else {
+            baseUrl = views.etQwenBaseUrl.text?.toString().orEmpty().trim()
+            if (baseUrl.isEmpty()) {
+                renderTranslateTestStatus(true, context.getString(R.string.rt_live_qwen_need_base_url))
+                views.etQwenBaseUrl.requestFocus()
+                return
+            }
+            model = SettingsStore.liveQwenModel(context)
+        }
+        // 探测用当前同传草稿的目标语种，走的是与真实会话相同的会话配置。
+        val targetLang = TranslationPlanStore
+            .loadDraft(context, TranslationMode.INTERPRETATION)
+            .normalized()
+            .targetLanguageCode
+
         translateTesting = true
         setTranslateTestBusy(true)
-        val testingMsg = context.getString(R.string.live_model_test_testing, GeminiLiveClient.MODEL)
-        renderTranslateTestStatus(false, testingMsg)
+        renderTranslateTestStatus(false, context.getString(R.string.live_model_test_testing, model))
 
         Thread({
             val result = runCatching {
-                GeminiLiveClient.probeLive(
-                    baseUrl = baseUrl,
-                    apiKey = apiKey,
-                    timeoutMs = 10_000L,
-                )
+                if (isGemini) {
+                    GeminiLiveClient.probeLive(
+                        baseUrl = baseUrl,
+                        apiKey = apiKey,
+                        timeoutMs = 10_000L,
+                    )
+                } else {
+                    QwenLiveClient.probe(
+                        baseUrl = baseUrl,
+                        apiKey = apiKey,
+                        model = model,
+                        targetLang = targetLang,
+                        timeoutMs = 10_000L,
+                    )
+                }
             }
             postToUi {
                 translateTesting = false

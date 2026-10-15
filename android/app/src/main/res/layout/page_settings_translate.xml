@@ -21,7 +21,7 @@
             android:text="@string/settings_translate_desc"
             android:textColor="@color/text_secondary"
             android:textSize="13sp"/>
-        <!-- 主卡：填 Key → 验证，全卡只有「测试翻译连接」一个实底按钮。 -->
+        <!-- 主卡：选服务商 → 填 Key → 验证，全卡只有「测试连接」一个实底按钮。 -->
         <com.google.android.material.card.MaterialCardView
             style="@style/LuminousCard"
             android:layout_width="match_parent"
@@ -32,41 +32,147 @@
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
                 android:padding="@dimen/space_16">
-                <!-- Key 行：字段 + 行内粘贴。 -->
-                <LinearLayout
+                <TextView
+                    style="@style/FieldLabel"
+                    android:layout_marginTop="0dp"
+                    android:text="@string/settings_translate_provider_label"/>
+                <com.google.android.material.button.MaterialButtonToggleGroup
+                    android:id="@+id/toggleLiveProvider"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:orientation="horizontal">
+                    android:layout_marginTop="@dimen/space_8"
+                    app:selectionRequired="true"
+                    app:singleSelection="true">
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnLiveProviderGemini"
+                        style="@style/Widget.Material3.Button.OutlinedButton"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:minHeight="@dimen/touch_target"
+                        android:paddingHorizontal="@dimen/grid_4"
+                        android:text="@string/rt_live_provider_gemini"
+                        android:textAllCaps="false"
+                        android:textSize="13sp"/>
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnLiveProviderQwen"
+                        style="@style/Widget.Material3.Button.OutlinedButton"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:minHeight="@dimen/touch_target"
+                        android:paddingHorizontal="@dimen/grid_4"
+                        android:text="@string/rt_live_provider_qwen"
+                        android:textAllCaps="false"
+                        android:textSize="13sp"/>
+                </com.google.android.material.button.MaterialButtonToggleGroup>
+                <!-- Gemini 分支：Key 行 + 行内粘贴。 -->
+                <LinearLayout
+                    android:id="@+id/containerGeminiKey"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical">
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="@dimen/space_12"
+                        android:orientation="horizontal">
+                        <com.google.android.material.textfield.TextInputLayout
+                            style="@style/Field"
+                            android:layout_width="0dp"
+                            android:layout_marginTop="0dp"
+                            android:layout_weight="1"
+                            android:hint="@string/hint_gemini_api_key"
+                            app:endIconMode="password_toggle"
+                            app:helperText="@string/helper_multiple_keys">
+                            <com.google.android.material.textfield.TextInputEditText
+                                android:id="@+id/etApiKeys"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:importantForAutofill="no"
+                                android:inputType="textPassword"
+                                android:maxLines="2"
+                                android:textSize="14sp"/>
+                        </com.google.android.material.textfield.TextInputLayout>
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/btnPasteApiKey"
+                            style="@style/FieldActionButton"
+                            android:layout_width="wrap_content"
+                            android:layout_gravity="top"
+                            android:layout_marginStart="@dimen/space_8"
+                            android:minHeight="40dp"
+                            android:text="@string/btn_paste_key"/>
+                    </LinearLayout>
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnViewApiKeyTutorial"
+                        style="@style/FieldLinkButton"
+                        android:text="@string/btn_view_api_key_tutorial"/>
+                </LinearLayout>
+                <!-- 千问分支：Key、业务空间地址与模型都是必填，不做折叠。 -->
+                <LinearLayout
+                    android:id="@+id/containerQwenKey"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:visibility="gone">
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="@dimen/space_12"
+                        android:orientation="horizontal">
+                        <com.google.android.material.textfield.TextInputLayout
+                            style="@style/Field"
+                            android:layout_width="0dp"
+                            android:layout_marginTop="0dp"
+                            android:layout_weight="1"
+                            android:hint="@string/hint_qwen_api_key"
+                            app:endIconMode="password_toggle"
+                            app:helperText="@string/helper_qwen_api_key">
+                            <com.google.android.material.textfield.TextInputEditText
+                                android:id="@+id/etQwenApiKey"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:importantForAutofill="no"
+                                android:inputType="textPassword"
+                                android:maxLines="2"
+                                android:textSize="14sp"/>
+                        </com.google.android.material.textfield.TextInputLayout>
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/btnPasteQwenApiKey"
+                            style="@style/FieldActionButton"
+                            android:layout_width="wrap_content"
+                            android:layout_gravity="top"
+                            android:layout_marginStart="@dimen/space_8"
+                            android:minHeight="40dp"
+                            android:text="@string/btn_paste_key"/>
+                    </LinearLayout>
                     <com.google.android.material.textfield.TextInputLayout
                         style="@style/Field"
-                        android:layout_width="0dp"
-                        android:layout_marginTop="0dp"
-                        android:layout_weight="1"
-                        android:hint="@string/hint_gemini_api_key"
-                        app:endIconMode="password_toggle"
-                        app:helperText="@string/helper_multiple_keys">
+                        android:hint="@string/hint_qwen_base_url"
+                        app:helperText="@string/helper_qwen_base_url">
                         <com.google.android.material.textfield.TextInputEditText
-                            android:id="@+id/etApiKeys"
+                            android:id="@+id/etQwenBaseUrl"
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
                             android:importantForAutofill="no"
-                            android:inputType="textPassword"
+                            android:inputType="textUri"
                             android:maxLines="2"
                             android:textSize="14sp"/>
                     </com.google.android.material.textfield.TextInputLayout>
-                    <com.google.android.material.button.MaterialButton
-                        android:id="@+id/btnPasteApiKey"
-                        style="@style/FieldActionButton"
-                        android:layout_width="wrap_content"
-                        android:layout_gravity="top"
-                        android:layout_marginStart="@dimen/space_8"
-                        android:minHeight="40dp"
-                        android:text="@string/btn_paste_key"/>
+                    <com.google.android.material.textfield.TextInputLayout
+                        style="@style/Field"
+                        android:hint="@string/hint_qwen_model"
+                        app:helperText="@string/helper_qwen_model">
+                        <com.google.android.material.textfield.TextInputEditText
+                            android:id="@+id/etQwenModel"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:importantForAutofill="no"
+                            android:inputType="text"
+                            android:maxLines="1"
+                            android:textSize="14sp"/>
+                    </com.google.android.material.textfield.TextInputLayout>
                 </LinearLayout>
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/btnViewApiKeyTutorial"
-                    style="@style/FieldLinkButton"
-                    android:text="@string/btn_view_api_key_tutorial"/>
                 <!-- 自检：一个小按钮 + 行内结果。 -->
                 <LinearLayout
                     android:layout_width="match_parent"
@@ -104,6 +210,7 @@
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
                 android:paddingVertical="@dimen/space_8">
+                <!-- Gemini 专属：可选反代地址。千问地址在主卡必填，这里整行隐藏。 -->
                 <com.google.android.material.button.MaterialButton
                     android:id="@+id/btnConnectionOptions"
                     style="@style/DisclosureRow"
@@ -131,6 +238,7 @@
                     </com.google.android.material.textfield.TextInputLayout>
                 </LinearLayout>
                 <com.google.android.material.divider.MaterialDivider
+                    android:id="@+id/dividerConnectionOptions"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginStart="@dimen/space_16"/>
@@ -157,6 +265,14 @@
                         android:layout_marginTop="@dimen/space_8"
                         android:text="@string/settings_translate_echo_target"
                         android:textSize="13sp"/>
+                    <TextView
+                        android:id="@+id/tvEchoScopeNote"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:text="@string/settings_translate_echo_scope_note"
+                        android:textColor="@color/text_muted"
+                        android:textSize="12sp"
+                        android:visibility="gone"/>
                     <TextView
                         android:id="@+id/tvRotateVal"
                         android:layout_width="wrap_content"
