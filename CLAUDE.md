@@ -55,7 +55,9 @@ CaptureService
         ↓
   PcmProcessor（PCM16 / 16 kHz / mono / 100 ms）
         ↓
-  GeminiLiveClient（WebSocket、队列、轮换、重连）
+  LiveTranslateSession（服务商无关的实时会话接口）
+        ├─ GeminiLiveClient（Gemini Live Translate）
+        └─ QwenLiveClient（百炼 LiveTranslate）
         ↓
   SubtitleStabilizer（确认行 / 当前行、切句、去重）
         ├─ StatusBus → MainActivity
@@ -69,7 +71,9 @@ CaptureService
 |---|---|
 | `MainActivity.kt` | 四个主页面、设置子页、权限流程、会话快照与 UI 状态 |
 | `CaptureService.kt` | 前台服务和完整实时音频管线 |
+| `LiveTranslateSession.kt` | 实时会话接口、服务商枚举与会话快照；工厂按快照创建实现 |
 | `GeminiLiveClient.kt` | Gemini Live setup、WebSocket、主动轮换与断线重连 |
+| `QwenLiveClient.kt` | 百炼 LiveTranslate 会话配置、事件解读与重连；含输入转写增量拼接 |
 | `PcmProcessor.kt` | 音频重采样和分块 |
 | `SubtitleStabilizer.kt` | 流式字幕稳定、多句确认与去重 |
 | `SubtitleOverlay.kt` | WindowManager 悬浮字幕、拖动、独立暂停与侧边收起 |
@@ -83,6 +87,25 @@ CaptureService
 | `AiTextClient.kt` / `ContentContextAnalyzer.kt` | 独立背景分析 AI，不参与实时连接；地址会去掉多写的 /v1 版本段 |
 | `VideoMetadataClient.kt` / `WebPageReaderClient.kt` | 三平台专用元数据抓取，以及未知公网播放页的 Jina Reader 受限文本提取 |
 | `SettingsStore.kt` / `KeystoreCrypto.kt` | 设置持久化与 API Key 加密 |
+
+### 实时翻译服务商
+
+实时链路对上层只暴露 `LiveTranslateSession`（`feedChunk` / `start` / `stop` + 状态、原文、译文三个回调），
+协议细节全部封在各实现里。新增服务商 = 实现该接口 + 在 `LiveProvider` 与 `LiveTranslateClientFactory` 各加一处分支。
+
+- **Gemini 沿用 `apiKeys` / `baseUrl` 两个既有偏好键**，老用户配置零迁移；千问用独立的 `liveQwen*` 键。
+  `SettingsStore.liveApiKeysRaw` / `liveBaseUrl` / `liveModel` 是唯一的解析入口，会话快照只读这三个。
+- **启动前的拦截必须按当前服务商算**：统一走 `liveConfigGap(context)`，缺件提示由 `LiveConfigGap.message`
+  带上服务商名字。Gemini 只要求 Key；千问要求 Key **和**业务空间地址。不要再写「一律检查 Gemini Key」
+  那种判断——选了千问却报 Gemini 既拦错人又指向错的设置项。
+- **首页（同传 / 视频）各有模型入口**：`updatePlanSummary` 之外还有一行「翻译模型」，显示当前服务商与
+  模型名，未配置时显示缺哪一项并可直接切服务商。展示文案由纯函数 `liveModelEntryText` 决定
+  （未配置时不显示模型名，避免被当成已经能用）。会话进行中该入口禁用——模型在启动时已冻结进快照。
+- 千问的模型名必须可配：`qwen3.8-*` 与 `qwen3.5-*` 的会话结构不同（`output_modalities` + `audio.input.format`
+  对 `modalities` + `input_audio_format`），`QwenLiveClient.isQwen38Family` 负责分流，字段发错会被服务端判为参数不合法。
+- 百炼地址按业务空间下发，没有可用的公共默认值，留空即未配置。
+- 千问只有 `zh` 一个中文代码，App 的 `zh-Hans` / `zh-Hant` 都映射到它，简繁之分在千问下会丢失。
+- 同语种跳过选项（`same_language_skip_options`）只有千问 3.5 及更早支持，设置页对 3.8 显示说明而不是假装生效。
 
 布局位于 `android/app/src/main/res/layout/`。四个主页面始终由 `activity_main.xml` 引入，Robolectric 启动测试会覆盖关键 ID 绑定。
 

@@ -2,6 +2,115 @@
 
 倒序排列，最新在上。每完成一步（或踩一个值得记的坑）加一条。
 
+## 2026-10-15 · 模拟器联调：修设置页分支失联，放行回环明文
+
+**改动**
+
+- `MainActivity` 的 `onSubPageShown` 钩子补一条：打开「翻译服务」子页时调
+  `SettingsController.refreshDisplayedProvider()`，按持久值重画服务商分支。
+  模拟器上实测发现：**在首页模型入口切换服务商后跳进设置页，页面仍显示上一家的分支**
+  （切到千问却展示 Gemini 的 Key 输入框）——子页是常驻 View，只在 setup 时渲染一次，
+  从不知道持久值变了。修法与场景库页的重载同构。
+- 新增 `res/xml/network_security_config.xml`，仅对 `127.0.0.1` 与 `10.0.2.2`
+  （模拟器的宿主机回环别名）放行明文。其余域名维持系统默认拒绝。
+  动机：模拟器联调需要连本机明文调试服务器，Android 9+ 默认拒绝明文，
+  `wss://` 又要求假服务器做 TLS（自签证书走不了受信链）。正式服务商一律 wss，不受影响。
+- 专用 AVD `lt_verify`（基于 system-images;android-35;default;arm64-v8a）留在
+  `~/.android/avd/` 以便下次联调；不想留随时 `avdmanager delete avd -n lt_verify`。
+
+**模拟器实测结论**
+
+- 安装启动无崩溃；首页模型入口两种状态（未配置给缺失提示 / 配齐给「服务商 · 模型」）
+  渲染正确；Switch Service 弹出的选择器两带各自模型名与「未配置」标记；
+  首页切千问后跳设置页，修复前分支失联、修复后正确显示千问三个必填项；
+  设置项（Key/地址/模型）经 `pm clear`、`install -r` 往返均正确落盘。
+- **未做完**：起在本机 0.0.0.0:8765 的协议假服务器（手写 RFC 6455，支持
+  session.update / 音频 / 收尾），宿主机直连验证过它本身工作正常，
+  但模拟器进到它还需要明文放行 + 重装重测，做到一半用户决定直接出包。
+  所以**整条实时音频链路仍未在模拟器上端到端跑过**，协议通路仍只有单测覆盖。
+
+## 2026-10-15 · 启动拦截按服务商判定，首页加模型入口
+
+**改动**
+
+- 修掉一个接入千问后必然踩到的拦截 bug：`SessionCoordinator.prepareSessionSettings` 原来
+  一律查 Gemini 的 `apiKeyList`，所以选了千问、填好千问凭据的人点「开始翻译」仍然被
+  「请先填 Gemini API Key」挡住，还被送到设置页。现在统一走 `liveConfigGap(context)`。
+- 新增 `LiveConfigGap` 与两条纯函数：`liveConfigGapFor`（判定表）、`liveModelEntryText`（展示文案）。
+  判定表按服务商分流：Gemini 只要 Key；千问要 Key **和**业务空间地址，Key 优先报。
+  缺件提示由 `LiveConfigGap.message(provider)` 生成，**带上服务商名字**。
+- 首页（同传 / 视频）各加一行「翻译模型」入口：显示当前服务商与实际会用的模型名；
+  未配置时显示缺哪一项并标成警示色，且**不显示模型名**（免得被当成已经能用）。
+  点它可直接切换服务商，选到没配好的那家会当场说清缺什么并跳到翻译服务设置页。
+  会话进行中该入口禁用——模型在启动时已冻结进快照，允许改会造成「改了却没生效」的误会。
+- `ModeHomeController` 新增 `openTranslationSettings` 回调，两个主页都接到
+  「设置 → 翻译服务」子页。
+- 删掉因本次改动变成死资源的 `rt_toast_fill_gemini_api_key_first`（中英各一条）。
+- 新增 10 个用例：判定表逐格、提示文案指名服务商、服务商标签唯一非空、
+  `liveModelFor` 分服务商取值、**「选千问启动视频翻译不再要求 Gemini Key」**（正是本次报的现象），
+  以及首页模型入口的两种渲染状态。
+
+**原因**：用户报「开起视频翻译的时候会出现为填写 gemini key」。根因就是拦截点漏改，
+是上一版抽出服务商接口时只改了 SettingsStore 与 CaptureService、没覆盖启动前的预检查。
+教训：**凡是「能不能开始」的判断都必须按当前服务商算**，这类判断散落各处就会漏。
+
+**顺带的设计**：模型入口放在开始按钮之前而不是只藏在设置里，把「这一场走哪家模型」
+变成开跑前就能一眼确认的事，未配置也在那里说清，而不是等点下开始才被弹回去。
+
+**真实验证**：`testDebugUnitTest` + `lintDebug` + `assembleDebug` 全过，
+用例 196 个（原 186，新增 10）全绿，Lint 0 error；`git diff --check` 通过。
+
+**未验证**：仍然没有百炼账号，真实音频翻译未跑通；模型入口的点击切换与设置页跳转
+由 Robolectric 覆盖了渲染与回调接线，但没有在真机上手动点过。
+
+## 2026-10-15 · 接入通义千问实时翻译，抽出服务商接口
+
+**改动**
+
+- 新增 `LiveTranslateSession`：实时会话的公共接口（`feedChunk` / `start` / `stop` +
+  状态、原文、译文三个回调）、`LiveProvider` 枚举、`LiveSessionConfig` 启动快照，
+  以及按快照创建实现的 `LiveTranslateClientFactory`。
+- 新增 `QwenLiveClient`：百炼 LiveTranslate 协议实现。会话配置按模型族分流
+  （`qwen3.8-*` 用 `output_modalities` + `audio.input.format`，`qwen3.5-*` 及更早用
+  `modalities` + `input_audio_format`），只申请文本输出，不带音频模态。
+  含输入转写增量拼接（兼容 `{delta}` 与 `{text, stash}` 两种事件形态）与收尾
+  `session.finish` 握手。
+- `GeminiLiveClient` 实现同一接口，**协议与报文一字未改**，仅把嵌套 `Listener`
+  换成共享类型；`GeminiLiveProbeTest` 继续锁原契约。
+- `SettingsStore` 增加服务商选择与千问独立配置。**Gemini 继续读原来的
+  `apiKeys` / `baseUrl` 键位，老用户零迁移**；千问用自己的 `liveQwen*` 键位，
+  两家凭据互不覆盖。`liveApiKeysRaw` / `liveBaseUrl` / `liveModel` 是唯一解析入口。
+- 翻译设置页加服务商切换与千问三个必填项（Key、业务空间地址、模型），
+  「测试连接」按服务商分派到各自的探测实现。
+- 新增 `QwenLiveClientTest`（端点构造、两个模型族的会话结构、语种映射、
+  音频上行格式、增量拼接、连接自检）与 `LiveProviderSettingsTest`（选择持久化、
+  Gemini 键位向后兼容、两家配置隔离）共 36 个用例。
+- 文档：`CLAUDE.md` 补实时管线的服务商分支与千问特有约束；
+  `docs/02-tech-notes.md` 新增「通义千问 LiveTranslate 接口」整节，
+  含与 Gemini 的事件对应表。
+
+**原因**：实时链路此前完全绑死在 Gemini Live 一家协议上，没有任何服务商抽象，
+国产模型接不进来（填了地址也只会拼出 Gemini 的 WS 路径，撞上 12 秒握手看门狗）。
+千问的 `qwen3.8-livetranslate-flash-realtime` 是专门做实时同传的模型，
+`translation.language` 对应 Gemini 的 `translationConfig`，输入转写常开且免费，
+事件结构能一一映射，是接入成本最低的一家。
+
+**已知取舍**（同步写进 CLAUDE.md，不假装没有）
+
+- 千问只有 `zh` 一个中文代码，App 的 `zh-Hans` / `zh-Hant` 都映射到它，简繁之分丢失。
+- 百炼地址按业务空间下发，没有公共默认域名，只能由用户填；留空即未配置并明确报错。
+- 3.8 的源语种只能自动识别，3.5 才能指定；同语种跳过选项 3.8 不支持，
+  设置页对 3.8 显示说明而不是让开关假装生效。
+- 千问的 `instructions` 承载提示词，但翻译方向由 `translation.language` 决定，
+  提示词只补充场景与专名约束——与 Gemini 的 `systemInstruction` 语义不完全等价。
+
+**真实验证**：`testDebugUnitTest` + `lintDebug` + `assembleDebug` 全过，
+用例 186 个（原 150，新增 36）全绿，Lint 0 error / 40 warning，
+`app-debug.apk` 正常产出。
+
+**未验证**：本机没有百炼账号，未跑通真实音频翻译。报文已按官方文档逐字段核对，
+并用 MockWebServer 锁住端点、鉴权头与会话配置结构；真实链路的时延与断句质量待有账号后实测。
+
 ## 2026-09-13 · README 默认语言改为英文（v2.6.1 / 39）
 
 **改动**：英文版从 `README.en.md` 对调为仓库主 `README.md`（GitHub 默认展示），

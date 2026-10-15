@@ -16,6 +16,7 @@ import com.xyq.livetranslate.SettingsStore
 import com.xyq.livetranslate.StatusBus
 import com.xyq.livetranslate.TranslationMode
 import com.xyq.livetranslate.TranslationPlanStore
+import com.xyq.livetranslate.liveConfigGap
 
 internal enum class PendingSessionStage {
     READY,
@@ -197,8 +198,11 @@ internal class SessionCoordinator(
         val mode = promptMode(captureMode)
         persistDraftInputs()
         val plan = TranslationPlanStore.loadDraft(context, mode)
-        if (SettingsStore.apiKeyList(context).isEmpty()) {
-            host.toast(context.getString(R.string.rt_toast_fill_gemini_api_key_first))
+        // 按当前选中的服务商判定缺什么：Gemini 只要 Key，千问还要业务空间地址。
+        // 提示里带上服务商名字，用户才知道该去填哪一项。
+        val gap = liveConfigGap(context)
+        if (gap != null) {
+            host.toast(gap.message(SettingsStore.liveProvider(context)))
             host.openTranslationSettings()
             return null
         }

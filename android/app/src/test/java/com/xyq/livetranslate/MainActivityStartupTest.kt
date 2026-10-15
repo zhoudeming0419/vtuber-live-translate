@@ -7,6 +7,7 @@ import android.graphics.drawable.GradientDrawable
 import android.os.Looper
 import android.view.LayoutInflater
 import android.view.View
+import android.widget.TextView
 import com.xyq.livetranslate.ui.ModeHomeController
 import com.xyq.livetranslate.ui.ModeHomeViews
 import com.xyq.livetranslate.ui.PendingSessionSnapshot
@@ -215,6 +216,7 @@ class MainActivityStartupTest {
         val sceneEntries = mutableListOf<Pair<TranslationMode, Int>>()
         val openedTabs = mutableListOf<Int>()
         var overlayEntries = 0
+        var translationSettingsEntries = 0
         val interp = ModeHomeController(
             context = activity,
             mode = TranslationMode.INTERPRETATION,
@@ -223,6 +225,7 @@ class MainActivityStartupTest {
             openSceneLibrary = { mode, tab -> sceneEntries += mode to tab },
             openOverlaySettings = { overlayEntries++ },
             openMainTab = { tabId -> openedTabs += tabId },
+            openTranslationSettings = { translationSettingsEntries++ },
         )
         val video = ModeHomeController(
             context = activity,
@@ -232,6 +235,7 @@ class MainActivityStartupTest {
             openSceneLibrary = { mode, tab -> sceneEntries += mode to tab },
             openOverlaySettings = { overlayEntries++ },
             openMainTab = { tabId -> openedTabs += tabId },
+            openTranslationSettings = { translationSettingsEntries++ },
         )
         interp.setup()
         video.setup()
@@ -272,6 +276,68 @@ class MainActivityStartupTest {
             sceneEntries,
         )
         assertEquals(2, overlayEntries)
+    }
+
+    // ---------- 主页的翻译模型入口 ----------
+
+    @Test
+    fun homeModelEntryShowsProviderAndModelOnceConfigured() {
+        // 配齐之后显示「服务商 · 模型」。这里直接验展示分支：
+        // Keystore 在 JVM 下不可用，没法通过真实持久化路径把 Key 写好；
+        // 「配没配齐」的判定本身由 LiveProviderSettingsTest 的纯函数用例逐格锁住。
+        val value = liveModelEntryText(
+            provider = LiveProvider.QWEN,
+            model = "qwen3.5-livetranslate-flash-realtime",
+            gap = null,
+        )
+        assertTrue("应显示服务商：$value", value.contains(AppStrings.get(R.string.rt_live_provider_qwen)))
+        assertTrue("应显示模型名：$value", value.contains("qwen3.5-livetranslate-flash-realtime"))
+    }
+
+    @Test
+    fun homeModelEntryExplainsWhatIsMissingInsteadOfShowingUnusableModel() {
+        // 全新安装、什么都没配：说清缺哪一项并指名服务商，且不把模型名摆出来，
+        // 否则会被当成「已经能用」。
+        clearAppSettings()
+
+        val value = interpHomeModelValue()
+        assertTrue(
+            "应指名服务商：$value",
+            value.contains(AppStrings.get(R.string.rt_live_provider_gemini)),
+        )
+        assertFalse(
+            "未配置时不应展示模型名：$value",
+            value.contains(GeminiLiveClient.MODEL),
+        )
+    }
+
+    /** 绑定同传主页并取回模型入口当前展示的文本。 */
+    private fun interpHomeModelValue(): String {
+        var value = ""
+        withActivity { activity ->
+            val root = LayoutInflater.from(activity)
+                .inflate(R.layout.activity_main, null)
+                .findViewById<View>(R.id.rootLayout)
+            ModeHomeController(
+                context = activity,
+                mode = TranslationMode.INTERPRETATION,
+                views = ModeHomeViews.bind(root, TranslationMode.INTERPRETATION),
+                toggleSession = {},
+                openSceneLibrary = { _, _ -> },
+                openOverlaySettings = {},
+                openMainTab = {},
+                openTranslationSettings = {},
+            ).setup()
+            value = root.findViewById<TextView>(R.id.tvInterpModelValue).text.toString()
+        }
+        return value
+    }
+
+    private fun context(): Context =
+        androidx.test.core.app.ApplicationProvider.getApplicationContext<Context>()
+
+    private fun clearAppSettings() {
+        context().getSharedPreferences("settings", Context.MODE_PRIVATE).edit().clear().commit()
     }
 
     @Test

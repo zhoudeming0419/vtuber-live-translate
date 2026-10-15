@@ -37,6 +37,79 @@ object SettingsStore {
         prefs(c).edit().putString("baseUrl", url.ifBlank { DEFAULT_BASE_URL }).apply()
     }
 
+    // ---------- 实时翻译服务商 ----------
+
+    /**
+     * Gemini 沿用既有的 `apiKeys` / `baseUrl` 键位，老用户配置零迁移；
+     * 千问用独立的一套键位。切换服务商不动另一家的凭据，来回切不会丢配置。
+     */
+    fun liveProvider(c: Context): LiveProvider = LiveProvider.fromKey(
+        prefs(c).getString("liveProvider", LiveProvider.GEMINI.storageKey) ?: ""
+    )
+
+    fun saveLiveProvider(c: Context, provider: LiveProvider) {
+        prefs(c).edit().putString("liveProvider", provider.storageKey).apply()
+    }
+
+    // --- 千问独立配置 ---
+
+    const val DEFAULT_QWEN_MODEL = QwenLiveClient.MODEL
+
+    fun liveQwenApiKey(c: Context): String {
+        val enc = prefs(c).getString("liveQwenApiKeyEnc", "") ?: ""
+        return if (enc.isEmpty()) "" else KeystoreCrypto.decrypt(enc)
+    }
+
+    fun saveLiveQwenApiKey(c: Context, raw: String) {
+        prefs(c).edit().putString("liveQwenApiKeyEnc", KeystoreCrypto.encrypt(raw.trim())).apply()
+    }
+
+    /**
+     * 百炼的实时接口是按业务空间下发的域名，没有可用的公共默认值：
+     * 用户必须粘贴自己的 `wss://<业务空间ID>.cn-beijing.maas.aliyuncs.com`。
+     * 空值表示未配置，启动会话时明确报错而不是回退到某个猜的地址。
+     */
+    fun liveQwenBaseUrl(c: Context): String =
+        prefs(c).getString("liveQwenBaseUrl", "") ?: ""
+
+    fun saveLiveQwenBaseUrl(c: Context, url: String) {
+        prefs(c).edit().putString("liveQwenBaseUrl", url.trim()).apply()
+    }
+
+    fun liveQwenModel(c: Context): String =
+        prefs(c).getString("liveQwenModel", DEFAULT_QWEN_MODEL)
+            ?.takeIf { it.isNotBlank() } ?: DEFAULT_QWEN_MODEL
+
+    fun saveLiveQwenModel(c: Context, model: String) {
+        prefs(c).edit()
+            .putString("liveQwenModel", model.trim().ifBlank { DEFAULT_QWEN_MODEL })
+            .apply()
+    }
+
+    // --- 当前服务商的统一解析（会话快照只读这里，不认识具体服务商） ---
+
+    fun liveApiKeysRaw(c: Context): String = when (liveProvider(c)) {
+        LiveProvider.GEMINI -> apiKeysRaw(c)
+        LiveProvider.QWEN -> liveQwenApiKey(c)
+    }
+
+    fun liveApiKeyList(c: Context): List<String> =
+        liveApiKeysRaw(c).split(',').map { it.trim() }.filter { it.isNotEmpty() }
+
+    fun liveBaseUrl(c: Context): String = when (liveProvider(c)) {
+        LiveProvider.GEMINI -> baseUrl(c)
+        LiveProvider.QWEN -> liveQwenBaseUrl(c)
+    }
+
+    /** Gemini 的模型名协议层写死，不可配置；千问必须可配（3.5 与 3.8 的会话结构不同）。 */
+    fun liveModel(c: Context): String = liveModelFor(c, liveProvider(c))
+
+    /** 指定服务商会用的模型名，供「切换模型」列表在未选中时就显示各自的值。 */
+    fun liveModelFor(c: Context, provider: LiveProvider): String = when (provider) {
+        LiveProvider.GEMINI -> GeminiLiveClient.MODEL
+        LiveProvider.QWEN -> liveQwenModel(c)
+    }
+
     // ---------- 悬浮窗样式 ----------
 
     const val DEFAULT_FONT_SP = 16

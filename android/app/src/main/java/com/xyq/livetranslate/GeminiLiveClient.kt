@@ -38,13 +38,8 @@ class GeminiLiveClient(
     private val targetLang: String = TranslationPlan.DEFAULT_TARGET_LANGUAGE,
     private val echoTargetLanguage: Boolean = true,
     private val rotateAfterMs: Long = SettingsStore.DEFAULT_ROTATE_SECONDS * 1000L,
-    private val listener: Listener,
-) {
-    interface Listener {
-        fun onState(state: String)
-        fun onInputText(text: String)
-        fun onOutputText(text: String)
-    }
+    private val listener: LiveTranslateSession.Listener,
+) : LiveTranslateSession {
 
     companion object {
         private const val TAG = "GeminiLive"
@@ -254,13 +249,13 @@ class GeminiLiveClient(
     @Volatile private var watchdogTask: ScheduledFuture<*>? = null
     private var senderThread: Thread? = null
 
-    fun start() {
+    override fun start() {
         if (!running.compareAndSet(false, true)) return
         senderThread = Thread(::senderLoop, "gemini-sender").also { it.start() }
         runOnScheduler { connect() }
     }
 
-    fun stop() {
+    override fun stop() {
         if (!running.compareAndSet(true, false)) return
         generation.incrementAndGet()
         rotateTask?.cancel(false)
@@ -288,7 +283,7 @@ class GeminiLiveClient(
     }
 
     /** 捕获线程调用：塞入一块 100ms/16k/mono 的 PCM。 */
-    fun feedChunk(chunk: ByteArray) {
+    override fun feedChunk(chunk: ByteArray) {
         if (!running.get()) return
         if (queue.size >= MAX_QUEUE) queue.pollFirst()
         queue.offerLast(chunk)

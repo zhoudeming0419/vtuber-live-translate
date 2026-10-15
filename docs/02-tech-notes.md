@@ -80,6 +80,83 @@ wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.G
 - 异常断线：立即重连，并把最近约 **1 秒**（10 块）已发送音频前置到队列；主动轮换本身不做这段 overlap。
 - **静音时长时间无返回是正常行为**（Windows 版 README 也确认：无声就不发数据），不要误判成断线。运行页「聆听中…」只按译文更新时间派生，不能当断线判定。
 
+## 通义千问 LiveTranslate 接口（2026-10-15 核对官方文档）
+
+WebSocket 入口（**按业务空间下发，没有公共默认域名**）：
+
+```text
+wss://{WorkspaceId}.cn-beijing.maas.aliyuncs.com/api-ws/v1/realtime?model=<模型>
+wss://{WorkspaceId}.ap-southeast-1.maas.aliyuncs.com/api-ws/v1/realtime?model=<模型>   # 新加坡
+```
+
+鉴权走请求头，**不是**查询参数：`Authorization: Bearer <DASHSCOPE_API_KEY>`。这一点与 Gemini 相反。
+
+模型：`qwen3.8-livetranslate-flash-realtime`（默认）、`qwen3.5-livetranslate-flash-realtime`、
+快照版 `qwen3.5-livetranslate-flash-realtime-2026-05-19`。上下文档 53248。
+
+### 事件与 Gemini 的对应关系
+
+| Gemini | 千问 |
+|---|---|
+| `setup` → `setupComplete` | `session.update` → `session.created` / `session.updated` |
+| `serverContent.outputTranscription.text` | `response.text.delta`（纯文本模态下） |
+| `serverContent.inputTranscription.text` | `conversation.item.input_audio_transcription.delta` |
+| `realtimeInput.audio` | `input_audio_buffer.append` |
+| `translationConfig.targetLanguageCode` | `session.translation.language` |
+| `echoTargetLanguage` | `translation.same_language_skip_options`（**3.8 不支持**） |
+| `goAway` | 未文档化；仍按 505 秒主动轮换兜底 |
+
+### 会话配置（两个模型族结构不同，字段发错会被判为参数不合法）
+
+`qwen3.8-*`：
+
+```json
+{"type":"session.update","session":{
+  "output_modalities":["text"],
+  "audio":{"input":{"format":{"type":"pcm","sample_rate":16000}}},
+  "translation":{"language":"zh"}}}
+```
+
+`qwen3.5-*` 及更早（含 omni 系列）：
+
+```json
+{"type":"session.update","session":{
+  "modalities":["text"],
+  "input_audio_format":"pcm",
+  "output_audio_format":"pcm",
+  "input_audio_transcription":{"model":"qwen3-asr-flash-realtime","language":"ja"},
+  "translation":{"language":"zh"}}}
+```
+
+- 输出模态取 `["text"]`：翻译语音本 App 从不播放，要音频只白付带宽与 token。
+- 输入音频 16 kHz PCM 单声道 16bit，与本项目 `PcmProcessor` 的输出天然一致，无需重采样。
+- `instructions` 承载 `PromptBuilder` 组合出的提示词；翻译方向由 `translation.language` 决定。
+- 3.8 的 ASR **始终开启、不可关闭且免费**，源语种只能自动识别；3.5 才能通过
+  `input_audio_transcription.language` 指定源语种（`auto` 时不发该字段）。
+- 3.8 不支持 `same_language_skip_options`；3.5 支持，且只在目标语种为 `zh` / `en` 时生效。
+- 语种代码里中文只有 `zh`，App 的 `zh-Hans` / `zh-Hant` 都映射到它。
+
+### 音频推送与响应时机
+
+```json
+{"type":"input_audio_buffer.append","audio":"<base64 pcm>"}
+```
+
+默认 VAD 模式（3.8 默认 `speaker_detection`）下服务端自动检测语句边界并触发翻译，
+**译文与音频流同步生成，通常在说话过程中就开始下发**，所以客户端持续推流即可，
+不需要 `input_audio_buffer.commit` 或 `response.create`。这一点和 Gemini 的连续流行为一致。
+
+### 收尾
+
+结束会话发 `{"type":"session.finish"}` 并等 `session.finished`：不发的最后一段识别与译文可能丢失。
+本项目的等待有上限（1.2 秒）且放在独立线程，绝不拖住退出。
+
+### 输入转写有两种事件形态
+
+`{delta}` 是纯增量；`{text, stash}` 是「已确认前缀 + 未定稿草稿」的当前整句。
+两种都只往下游吐新增部分，否则字幕会整句重复。上游偶尔回退重发更短前缀，此时按整句重来，
+交给 `SubtitleStabilizer` 去重。实现见 `QwenInputTranscriptTracker`。
+
 ## 安卓关键 API
 
 | 能力 | API | 备注 |

@@ -35,7 +35,7 @@ import kotlin.math.sqrt
  * - video：AudioPlaybackCapture 内录 + 悬浮字幕（YouTube / 其他 App）
  * - mic：麦克风同传，App 内字幕为主，有悬浮窗权限时也挂悬浮窗
  *
- * 链路：AudioRecord → PcmProcessor → GeminiLiveClient → SubtitleStabilizer → Overlay / TranscriptLogger
+ * 链路：AudioRecord → PcmProcessor → LiveTranslateSession → SubtitleStabilizer → Overlay / TranscriptLogger
  */
 class CaptureService : Service() {
 
@@ -63,7 +63,7 @@ class CaptureService : Service() {
     private var projection: MediaProjection? = null
     private var audioRecord: AudioRecord? = null
     private var captureThread: Thread? = null
-    private var client: GeminiLiveClient? = null
+    private var client: LiveTranslateSession? = null
     private var overlay: SubtitleOverlay? = null
     private var logger: TranscriptLogger? = null
 
@@ -134,13 +134,15 @@ class CaptureService : Service() {
             targetLanguageCode = targetLanguage,
             scenePresetId = scenePresetId,
         ).normalized()
-        val apiKeysSnapshot = SettingsStore.apiKeyList(this).toList()
+        val providerSnapshot = SettingsStore.liveProvider(this)
+        val apiKeysSnapshot = SettingsStore.liveApiKeyList(this)
         if (apiKeysSnapshot.isEmpty()) {
             StatusBus.connState = "error:未配置 API Key"
             stopSelf()
             return
         }
-        val baseUrlSnapshot = SettingsStore.baseUrl(this)
+        val baseUrlSnapshot = SettingsStore.liveBaseUrl(this)
+        val modelSnapshot = SettingsStore.liveModel(this)
         val echoSnapshot = SettingsStore.echoTargetLanguage(this)
         val rotateMsSnapshot = SettingsStore.rotateSeconds(this) * 1000L
         val idleMsSnapshot = SettingsStore.stabIdleMs(this).toLong()
@@ -233,18 +235,23 @@ class CaptureService : Service() {
             }
         }
 
-        val c = GeminiLiveClient(
-            keyProvider = {
-                apiKeysSnapshot.random().also { key ->
-                    StatusBus.currentKeyLabel = "key#${apiKeysSnapshot.indexOf(key) + 1}/${apiKeysSnapshot.size}"
-                }
-            },
-            baseUrl = baseUrlSnapshot,
-            prompt = sessionPrompt,
-            targetLang = sessionPlan.targetLanguageCode,
-            echoTargetLanguage = echoSnapshot,
-            rotateAfterMs = rotateMsSnapshot,
-            listener = object : GeminiLiveClient.Listener {
+        val c = LiveTranslateClientFactory.create(
+            config = LiveSessionConfig(
+                provider = providerSnapshot,
+                keyProvider = {
+                    apiKeysSnapshot.random().also { key ->
+                        StatusBus.currentKeyLabel = "key#${apiKeysSnapshot.indexOf(key) + 1}/${apiKeysSnapshot.size}"
+                    }
+                },
+                baseUrl = baseUrlSnapshot,
+                model = modelSnapshot,
+                prompt = sessionPrompt,
+                targetLang = sessionPlan.targetLanguageCode,
+                sourceLang = sessionPlan.sourceLanguageCode,
+                echoTargetLanguage = echoSnapshot,
+                rotateAfterMs = rotateMsSnapshot,
+            ),
+            listener = object : LiveTranslateSession.Listener {
                 override fun onState(state: String) {
                     StatusBus.connState = state
                     val color = when {
