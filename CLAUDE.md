@@ -143,7 +143,7 @@ GitHub Actions 工作流有两个，职责分开：
 约束与出处：
 
 - 手机更新的唯一比较依据是 `versionCode`。CI 渠道从 **1001** 起随 run 号自增，永久高于手动内测的 39，
-  否则 App 内永远显示「已是最新」。渠道身份：Release 固定 tag `ci-latest`，每次构建覆盖 assets。
+  否则 App 内永远显示「已是最新」。渠道身份：Release 固定 tag `ci-latest`；APK 素材名内嵌 run 号，旧 asset 不覆盖地累积——这样旧清单引用的下载地址永远有效。
 - `update.json` 是清单的唯一真源（`versionCode` / `versionName` / `apkName` / `downloadUrls`），
   App 按优先级读 raw main → jsDelivr → ghproxy → Releases API。**App 向哪个仓库检查由编译期
   `BuildConfig.UPDATE_REPO_OWNER / UPDATE_REPO_NAME` 决定**，默认当前 fork；换镜像或迁移仓库时用
