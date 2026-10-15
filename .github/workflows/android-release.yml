@@ -9,10 +9,8 @@ name: Android Release (CI channel)
     branches:
       - main
     paths-ignore:
-      - "**/*.md"
-      - "docs/**"
+      # 唯一的回环风险是本 workflow 自己回写的 update.json；[skip ci] 再兜一层底
       - "update.json"
-      - ".github/**"
   workflow_dispatch:
 
 permissions:
@@ -48,8 +46,8 @@ jobs:
         run: |
           set -euo pipefail
           # CI 渠道版本从 1001 起随 run 号单调递增，永久高于手动内测的 39
-          CODE=$((1000 + RUN_NUMBER))
-          VERSION="2.6.1-ci${RUN_NUMBER}"
+          CODE=$((1000 + GITHUB_RUN_NUMBER))
+          VERSION="2.6.1-ci${GITHUB_RUN_NUMBER}"
           APK_NAME="LiveTranslate-${VERSION}.apk"
           {
             echo "code=${CODE}"
