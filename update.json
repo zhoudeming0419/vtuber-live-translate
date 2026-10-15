@@ -1,10 +1,10 @@
 {
-  "versionCode": 39,
-  "versionName": "2.6.1",
-  "title": "流译 2.6.1（场景库跟随界面语言）",
-  "notes": "修复场景库的语言问题，其余同 2.6.0。\n\n• 没改过的内置场景，名称和描述都跟随界面语言；你改过的内容原样保留\n• 修复首次运行时的界面语言被冻进存储，并顺着场景名漏进发给模型的提示词\n\n2.4.1 升级上来的还包含 2.6.0 的全部改动：\n\n• 翻译服务与背景分析 AI 两页统一骨架，按钮按主次分层\n• 模型选择改为模型框右侧刷新图标 + 就地下拉\n• 悬浮窗控制按钮做小，收起后只留一根贴边小蓝条\n• 修复控制条自动隐藏失效与收起态拖不动\n• 新增中英双语界面；背景分析 AI 支持 OpenCode Zen 免费接入点\n• 仓库开源为 MIT，README 重写并补英文版\n\n安装包为 Debug 签名内测包，可覆盖安装同签名旧版。",
-  "apkName": "LiveTranslate-2.6.1.apk",
+  "versionCode": 1003,
+  "versionName": "2.6.1-ci3",
+  "title": "流译 2.6.1-ci3（CI 渠道）",
+  "notes": "versionCode: 1003\n\nCI 渠道构建，覆盖安装同签名旧版；正式内测说明以 GitHub Release 与 README 为准。\n\n本次相对上一个 ci-latest 的提交标题：\n• merge: CI 渠道发布素材名修复\n• fix: 发布前把 app-debug.apk 复制为带版本名的素材\n• merge: CI 渠道触发配置修复\n• fix: CI 渠道首次实跑 FAIL 的两处触发配置\n• merge: CI 更新渠道（push main 后手机可自动更新）\n• feat: CI 更新渠道——push main 后手机可自动更新\n• merge: 通义千问服务商接入（含启动拦截判定、主页模型入口与联调修复）\n• docs: 千问协议速查、服务商边界与开发日志",
+  "apkName": "LiveTranslate-2.6.1-ci3.apk",
   "downloadUrls": [
-    "https://github.com/xieyuanqing/vtuber-live-translate/releases/download/v2.6.1/LiveTranslate-2.6.1.apk"
+    "https://github.com/zhoudeming0419/vtuber-live-translate/releases/download/ci-latest/LiveTranslate-2.6.1-ci3.apk"
   ]
 }
